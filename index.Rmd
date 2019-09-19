@@ -1,38 +1,512 @@
 ---
 title: "DETECT Recruiting Dashboard"
+# date: "Updated: `r Sys.Date()`"
 output: 
   flexdashboard::flex_dashboard:
-    orientation: columns
+    orientation: column
     vertical_layout: fill
 ---
 
+<!-- 
+When refreshing, download the following to desktop:
+  1. Participant scheduler
+  2. Participant call log
+  3. Phone recruitment
+  4. Gift card
+-->
+
 ```{r setup, include=FALSE}
 library(flexdashboard)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
 ```
 
-Hello, World!
+```{r data, include=FALSE}
+# Download call log data to desktop. The R script below reads it in and cleans it.
+source("data_call_log.R")
+source("data_participant_scheduler.R")
+source("data_gift_card.R")
+source("data_moca.R")
+```
 
-Column {data-width=650}
+<!-- Data Wrangling -->
+
+```{r}
+# Calculate summary statistics about calls made that will be used in the charts below
+calls_per_day <- call_log %>%
+  count(call_date) %>% 
+  # Fill-in missing days with zero
+  complete(call_date = seq(call_date[1], Sys.Date(), by = "1 day"), fill = list(n = 0)) %>% 
+  # Add cumulative calls 
+  mutate(cumulative_n = cumsum(n)) %>% 
+  # Add call day variable
+  mutate(
+    day = weekdays(call_date),
+    day = forcats::fct_relevel(day, "Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
+  ) %>% 
+  # Improve plot readability
+  rename(
+    Date = call_date,
+    Day = day
+  )
+```
+
+```{r}
+# 2019-09-19: Sunil has a test record in the data. I emailed him about it. This part of the code can be deleted once he drops that record from the data. 
+scheduled_ids <- filter(scheduled_ids, !is.na(scheduled_hour_f))
+
+# Calculate summary statistics about interviews scheduled that will be used in the charts below
+scheduled_per_day <- scheduled_ids %>% 
+  count(scheduled_date) %>% 
+  # Improve plot readability
+  rename(
+    Date = scheduled_date,
+    n_scheduled = n
+  )
+```
+
+```{r}
+# Merge the calls data with the scheduled data
+calls_per_day_w_scheduled <- calls_per_day %>%
+  left_join(scheduled_per_day, by = "Date") %>% 
+  mutate(
+    n_scheduled = if_else(is.na(n_scheduled), 0L, n_scheduled),
+    cumulative_scheduled = cumsum(n_scheduled)
+  ) %>% 
+  
+  # For coloring the points on the recruiting calls plot below
+  mutate(
+    n_scheduled_f = case_when(
+      n_scheduled == 0 ~ 1,
+      n_scheduled == 1 ~ 2,
+      n_scheduled >  1 ~ 3
+    ),
+    n_scheduled_f = factor(n_scheduled_f, levels = c(1, 2, 3), labels = c(
+      "None", "1", "2 or More"
+    ))
+  ) %>% 
+  
+  # Renaming to make the plotly popovers look better
+  rename(
+    `N called` = n,
+    `N Scheduled` = n_scheduled_f
+  )
+```
+
+```{r}
+# Data check
+# At this point, both should be zero. We aren't making calls on the weekend. 
+# A number > 0 indicates a data entry error.
+# calls_per_day_w_scheduled %>% 
+#   filter(Day %in% c("Saturday", "Sunday")) %>% 
+#   summarise(
+#     called = sum(`N called`),
+#     scheduled = sum(n_scheduled)
+#   )
+```
+
+```{r}
+# Remove Saturday and Sunday from the data
+# Primarily to get a more accurate calls per day calculation
+calls_per_day_w_scheduled <- calls_per_day_w_scheduled %>% 
+  filter(!Day %in% c("Saturday", "Sunday"))
+```
+
+```{r}
+# Stack the data to long format to easily color the cumulative people and 
+# follow-up interviews scheduled line chart
+cum_calls_and_scheduled <- calls_per_day_w_scheduled %>%
+  select(Date, cumulative_n, cumulative_scheduled) %>%
+  tidyr::pivot_longer(-Date, names_to = "group", values_to = "n") %>% 
+  
+  # To improve readability
+  mutate(
+    group = if_else(group == "cumulative_n", "Calls", "Scheduled F/U Visits")
+  )
+```
+
+```{r}
+# Get means and total calls by day
+# For the calls made by day of the week plot
+means_by_day <- calls_per_day %>% 
+  group_by(Day) %>% 
+  filter(!Day %in% c("Saturday", "Sunday")) %>%
+  summarise(
+    mean = mean(n, na.rm = TRUE),
+    total = sum(n, na.rm = TRUE)
+  )
+```
+
+
+<!-- Dashboard starts here -->
+
+Overview
+=======================================================================
+
+Updated: `r Sys.Date()`
+
+Value boxes {data-width=250}
 -----------------------------------------------------------------------
 
-### Chart A
+### Total follow-up interviews completed
 
-```{r}
-
+```{r message=FALSE}
+gauge(n_completed, min = 0, max = 2520)
 ```
 
-Column {data-width=350}
+### Total calls made
+
+```{r}
+total_calls <- nrow(call_log)
+valueBox(total_calls, icon = "fa-phone")
+```
+
+### Average number of calls per day
+
+```{r}
+n_days_recruiting <- calls_per_day_w_scheduled %>% 
+  filter()
+mean_calls_per_day <- round(total_calls/nrow(calls_per_day_w_scheduled), 0)
+valueBox(mean_calls_per_day, icon = "fa-phone")
+```
+
+### Total follow-up interviews scheduled
+
+```{r}
+total_scheduled <- max(calls_per_day_w_scheduled$cumulative_scheduled)
+valueBox(total_scheduled, icon = "fa-calendar")
+```
+
+### Follow-up interview scheduling rate
+
+```{r}
+rate_scheduled <- round(total_calls/total_scheduled, 0)
+scheduled_message <- paste("1 per", rate_scheduled, "calls")
+valueBox(scheduled_message, icon = "fa-phone")
+```
+
+### Average number of calls made to each patient
+
+```{r}
+mean_calls <- call_log %>% count(medstar_id) %>% summarise(mean = mean(n)) %>% round(1)
+valueBox(mean_calls, icon = "fa-phone")
+```
+
+Plots {data-width=750}
 -----------------------------------------------------------------------
 
-### Chart B
+### Recruiting calls made and follow-up interviews scheduled by date
 
 ```{r}
+calls_per_day_plot <- calls_per_day_w_scheduled %>% 
+  ggplot(aes(Date, `N called`)) +
+  geom_line(color = "#8a8a8a") +
+  geom_point(aes(color = `N Scheduled`)) +
+  scale_x_date("Date", date_label = "%b-%d", 
+    # Make sure the x-axis includes the earliest date and today with other breakes
+    # coming at 1 week intervals.
+    breaks = seq(min(calls_per_day_w_scheduled$Date), Sys.Date(), "weeks")
+  ) +
+  scale_y_continuous("Number of Calls") +
+  scale_color_manual(
+    "F/U Scheduled", 
+    values = c("#a60303", "#6AA2E7", "#03a606"),
+    drop = FALSE
+  ) +
+  theme_bw() +
+  theme(legend.title = element_text(size = 8))
 
+plotly::ggplotly(calls_per_day_plot)
 ```
 
-### Chart C
+> The points on the plot above are colored according to the number of follow-up interviews scheduled on a given day.     
+> Red = None, Blue = 1, Green = 2 or more.
+
+### Cumulative people and follow-up interviews scheduled
 
 ```{r}
+calls_per_day_cum_plot <- cum_calls_and_scheduled %>% 
+  ggplot(aes(Date, n, col = group)) +
+  geom_line() +
+  geom_point() +
+  scale_x_date("Date", date_label = "%b-%d", 
+    # Make sure the x-axis includes the earliest date and today with other breakes
+    # coming at 1 week intervals.
+    breaks = seq(min(calls_per_day_w_scheduled$Date), Sys.Date(), "weeks")
+  ) +
+  scale_y_continuous("Number of Calls") +
+  scale_color_manual("", values = c("Black", "#6AA2E7")) +
+  theme_bw()
 
+plotly::ggplotly(calls_per_day_cum_plot)
 ```
 
+Call Timing {data-orientation=rows}
+=======================================================================
+
+Updated: `r Sys.Date()`
+
+Row: called and scheduled by day
+-----------------------------------------------------------------------
+
+### Follow-up interviews scheduled by day of the week
+
+```{r}
+calls_per_day_w_scheduled %>% 
+  group_by(Day) %>% 
+  summarise(
+    `Calls Made` = sum(`N called`),
+    `F/U Interviews Scheduled` = sum(n_scheduled),
+    `Percent Scheduled` = ((`F/U Interviews Scheduled` / `Calls Made`) * 100) %>% 
+      round(1) %>% 
+      format(nsmall = 1) %>% 
+      paste0("%")
+  ) %>% 
+  knitr::kable(align = c("l", "c", "c", "c"))
+```
+
+### Calls made by day of the week
+
+```{r}
+# Plot calls by day
+calls_by_day_plot <- calls_per_day %>% 
+  filter(!Day %in% c("Saturday", "Sunday")) %>%
+ggplot(aes(Day, n)) +
+  geom_point(aes(col = Day)) +
+  geom_segment(
+    aes(
+      x = c(0.75, 1.75, 2.75, 3.75, 4.75),
+      y = mean,
+      xend = c(1.25, 2.25, 3.25, 4.25, 5.25),
+      yend = mean,
+      col = Day
+    ),
+    size = 1.2,
+    data = means_by_day
+  ) +
+  scale_x_discrete("Day") +
+  scale_y_continuous("Number of Calls") +
+  theme_classic() +
+  theme(legend.position = "none")
+
+plotly::ggplotly(calls_by_day_plot)
+```
+
+> The colored lines on the plot are the average number of calls by day.
+
+Row: called and scheduled by time
+-----------------------------------------------------------------------
+
+### Follow-up interviews scheduled by time of day
+
+```{r}
+calls_by_time <- call_log %>% 
+  count(call_hour_f) %>% 
+  rename(
+    `Time of Day` = call_hour_f,
+    `Calls Made` = n
+  )
+
+scheduled_by_time <- scheduled_ids %>% 
+  count(scheduled_hour_f, .drop = FALSE) %>% 
+  rename(
+    `Time of Day` = scheduled_hour_f,
+    `F/U Interviews Scheduled` = n
+  )
+
+left_join(calls_by_time, scheduled_by_time, by = "Time of Day") %>% 
+  mutate(
+    `Percent Scheduled` = ((`F/U Interviews Scheduled` / `Calls Made`) * 100) %>%
+      round(1) %>%
+      format(nsmall = 1) %>%
+      paste0("%")
+  ) %>% 
+  knitr::kable(align = c("l", "c", "c", "c"))
+```
+
+### Calls by time of day
+
+```{r}
+calls_by_time_plot <- call_log %>% 
+  # Improve readability
+  rename("Call Hour" = "call_hour_f") %>% 
+ggplot() +
+  geom_bar(aes(`Call Hour`, fill = ..count..)) +
+  scale_x_discrete("Time of Day") +
+  scale_y_continuous("Number of Calls") +
+  theme_classic() +
+  theme(
+    legend.position = "none",
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10))
+  ) +
+  coord_flip()
+
+plotly::ggplotly(calls_by_time_plot)
+```
+
+MoCA {data-orientation=rows}
+=======================================================================
+
+Updated: `r Sys.Date()`
+
+<!-- Load the moca data, may want to move this up later -->
+
+```{r message=FALSE}
+moca_deid <- readr::read_csv("data/moca_deid.csv")
+```
+
+Value boxes 
+-----------------------------------------------------------------------
+
+### Number of patients who give initial consent for screening
+
+```{r}
+eligibility_consent <- moca_deid %>% filter(phone_eligible_consent == "Yes") %>% nrow()
+valueBox(eligibility_consent, icon = "fa-thumbs-up")
+```
+
+### Number of patients who pass hearing screen
+
+```{r}
+hearing_pass <- moca_deid %>% filter(phone_hearing_check == "Correct") %>% nrow()
+valueBox(hearing_pass, icon = "fa-volume-up")
+```
+
+### Number of MoCA assessments started
+
+```{r}
+moca_started <- moca_deid %>% filter(!is.na(moca_memory1)) %>% nrow()
+valueBox(moca_started, icon = "fa-notes-medical")
+```
+
+### Number of MoCA assessments completed
+
+```{r}
+moca_completed <- moca_deid %>% filter(!is.na(c_moca_orientation)) %>% nrow()
+valueBox(moca_completed, icon = "fa-flag-checkered")
+```
+
+### Number of MoCA assessments passed
+
+```{r}
+moca_passed <- sum(moca_deid$c_score >= 17, na.rm = TRUE)
+valueBox(moca_passed, icon = "fa-trophy")
+```
+
+Guages 
+-----------------------------------------------------------------------
+
+### Percent of patients who give initial consent for screening
+
+```{r}
+eligibility_asked <- moca_deid %>% filter(!is.na(phone_eligible_consent)) %>% nrow()
+eligibility_consent_percent <- round(eligibility_consent / eligibility_asked * 100, 0)
+gauge(eligibility_consent_percent, min = 0, max = 100, symbol = "%")
+```
+
+### Percent of patients who pass hearing screen if checked
+
+```{r}
+hearing_checked <- moca_deid %>% filter(!is.na(phone_hearing_check)) %>% nrow()
+hearing_pass_percent <- round(hearing_pass / hearing_checked * 100, 0)
+gauge(hearing_pass_percent, min = 0, max = 100, symbol = "%")
+```
+
+### Percent of MoCA assessments started if hearing screen passed
+
+```{r}
+moca_started <- moca_deid %>% filter(!is.na(moca_memory1)) %>% nrow()
+moca_started_percent <- round(moca_started / hearing_pass * 100, 0)
+gauge(moca_started_percent, min = 0, max = 100, symbol = "%")
+```
+
+### Percent of MoCA assessments completed if started
+
+```{r}
+moca_percent_completed <- round(moca_completed / moca_started * 100, 0)
+gauge(moca_percent_completed, min = 0, max = 100, symbol = "%")
+```
+
+### Percent of MoCA assessments passed if completed
+
+```{r}
+moca_percent_passed <- round(moca_passed / moca_completed * 100, 0)
+gauge(moca_percent_passed, min = 0, max = 100, symbol = "%")
+```
+
+Plots 
+-----------------------------------------------------------------------
+
+### Percent of MoCA assessment items completed
+
+```{r}
+moca_item_plot <- moca_deid %>% 
+  # Keep only MoCA's that were startd
+  filter(!is.na(moca_memory1)) %>% 
+  # Keep only the MoCA questions (i.e. not calculated variables)
+  select(
+    moca_memory1, moca_memory2, moca_digit_forward, moca_digit_backward, 
+    moca_vigilance, moca_serial7, moca_sentence_rep, moca_verb_fluency,
+    moca_abstraction, moca_delay_recall, moca_orientation
+  ) %>% 
+  # Count the number completed for each question (i.e. not missing or refused)
+  mutate_all(
+    function(x) {
+      out <- if_else(!is.na(x) & x != "Refused/hangup", 1, 0, NA_real_)
+      out
+    }
+  ) %>% 
+  summarise_all(sum) %>% 
+  # Convert to a formated percentage
+  mutate_all(
+    function(x) {
+      out <- round(x / moca_started * 100, 0)
+      out
+    }
+  ) %>% 
+  # Reshape wide to long
+  tidyr::pivot_longer(
+    everything(), 
+    names_prefix = "moca_"
+  ) %>% 
+  # Clean up MoCA item names to improve readability
+  mutate(
+    name = case_when(
+      name == "memory1"        ~ "Memory Trial 1",
+      name == "memory2"        ~ "Memory Trial 2",
+      name == "digit_forward"  ~ "Digits Forward",
+      name == "digit_backward" ~ "Digits Backward",
+      name == "vigilance"      ~ "Attention",
+      name == "serial7"        ~ "Serial 7 Subtraction",
+      name == "sentence_rep"   ~ "Repetition",
+      name == "verb_fluency"   ~ "Verbal Fluency",
+      name == "abstraction"    ~ "Abstraction",
+      name == "delay_recall"   ~ "Delayed Recall",
+      name == "orientation"    ~ "Orientation"
+    ),
+    name = factor(name) %>% 
+      forcats::fct_relevel(
+        "Memory Trial 1", "Memory Trial 2", "Digits Forward", "Digits Backward", 
+        "Attention", "Serial 7 Subtraction", "Repetition", "Verbal Fluency",
+        "Abstraction", "Delayed Recall", "Orientation"
+      )
+  ) %>% 
+  # Make variable names more readable
+  rename(
+    "MoCA Item" = "name",
+    "Percent Complete" = "value"
+  ) %>% 
+
+# Bar graph. Percent completed for each item.
+ggplot(aes(`MoCA Item`, `Percent Complete`)) +
+  geom_col(fill = "#6AA2E7") +
+  geom_hline(yintercept = 100, linetype = "dashed", alpha = 0.5) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(hjust = 1, vjust = 1, angle = 45)
+  )
+
+plotly::ggplotly(moca_item_plot)
+```
