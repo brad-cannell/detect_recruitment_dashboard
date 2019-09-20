@@ -12,7 +12,7 @@ con <- DBI::dbConnect(
   odbc::odbc(),
   driver   = "/Library/ODBC/FileMaker ODBC.bundle/Contents/MacOS/FileMaker ODBC",
   server   = "spsqlapwv003.sph.uthouston.edu",
-  database = "DETECT Test",
-  uid      = keyring::key_list("detect_fm_db")[1,2],
-  pwd      = keyring::key_get("detect_fm_db")
+  database = "DETECT",
+  uid      = keyring::key_list("detect_fm_db_readonly")[1,2],
+  pwd      = keyring::key_get("detect_fm_db_readonly")
 )
