@@ -10,6 +10,7 @@ source("make_posixct.R") # Used to convert dates to POSIXct
 
 # Open the Connection to the FM database
 # Keyring notes: https://db.rstudio.com/best-practices/managing-credentials/
+# Keychain error: https://github.com/r-lib/keyring/issues/45#issuecomment-332491293
 con <- DBI::dbConnect(
   odbc::odbc(),
   driver   = "/Library/ODBC/FileMaker ODBC.bundle/Contents/MacOS/FileMaker ODBC",
