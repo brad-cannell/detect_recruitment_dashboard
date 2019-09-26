@@ -24,10 +24,11 @@ library(ggplot2)
 
 ```{r data, include=FALSE}
 # Download call log data to desktop. The R script below reads it in and cleans it.
-source("data_call_log.R")
-source("data_participant_scheduler.R")
-source("data_gift_card.R")
-source("data_moca.R")
+# source("data_call_log.R")
+# source("data_participant_scheduler.R")
+# source("data_gift_card.R")
+# source("data_moca.R")
+source("data_import.R")
 ```
 
 <!-- Data Wrangling -->
