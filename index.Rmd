@@ -347,6 +347,25 @@ ggplot() +
 plotly::ggplotly(calls_by_time_plot)
 ```
 
+Call Responses
+=======================================================================
+
+Updated: `r Sys.Date()`
+
+### Call log responses overall
+
+```{r}
+call_log %>% 
+  count(response) %>% 
+  arrange(desc(n)) %>% 
+  mutate(
+    `Cumulative Count` = cumsum(n),
+    Percent = (n / sum(n) * 100) %>% round(0) %>% paste0("%"),
+  ) %>% 
+  rename("Response" = "response", "Count" = "n") %>% 
+  knitr::kable(align = c("l", "c", "c", "c"))
+```
+
 MoCA {data-orientation=rows}
 =======================================================================
 
