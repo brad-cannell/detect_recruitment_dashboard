@@ -101,8 +101,8 @@ call_log <- call_log %>%
     # Create a call time hour variable
     call_hour = lubridate::hour(created_time),
     call_hour_f = factor(call_hour, 
-      labels = c("10-10:59", "11-11:59", "12-12:59", "13-13:59", "14-14:59", 
-                 "15-15:59", "16-16:59", "17-17:59")
+      labels = c("9-9:59", "10-10:59", "11-11:59", "12-12:59", "13-13:59", 
+                 "14-14:59", "15-15:59", "16-16:59", "17-17:59")
     ),
     # Fix call_date typos
     # If call_date is earlier than created_date, then set call_date equal to 
