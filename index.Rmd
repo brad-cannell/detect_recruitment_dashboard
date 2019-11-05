@@ -15,6 +15,26 @@ When refreshing, download the following to desktop:
   4. Gift card
 -->
 
+<!-- 
+Packages:
+  1. rmarkdown
+  2. dplyr
+  3. DBI
+  4. odbc
+  5. Keyring
+  6. purrr
+  7. stringr
+  8. hms
+  9. lubridate
+  10. forcats
+  11. readr
+  12. flexdashboard
+  13. tidyr
+  14. ggplot2
+  15. plotly
+  16. knitr
+-->
+
 ```{r setup, include=FALSE}
 library(flexdashboard)
 library(dplyr)
@@ -22,7 +42,7 @@ library(tidyr)
 library(ggplot2)
 ```
 
-```{r data, include=FALSE}
+```{r data}
 # Download call log data to desktop. The R script below reads it in and cleans it.
 # source("data_call_log.R")
 # source("data_participant_scheduler.R")
