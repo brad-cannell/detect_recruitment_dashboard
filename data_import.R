@@ -100,10 +100,6 @@ call_log <- call_log %>%
     created_time = hms::as_hms(x_created_timestamp),
     # Create a call time hour variable
     call_hour = lubridate::hour(created_time),
-    call_hour_f = factor(call_hour, 
-      labels = c("9-9:59", "10-10:59", "11-11:59", "12-12:59", "13-13:59", 
-                 "14-14:59", "15-15:59", "16-16:59", "17-17:59")
-    ),
     # Fix call_date typos
     # If call_date is earlier than created_date, then set call_date equal to 
     # the date in x_created_timestamp.
@@ -119,6 +115,24 @@ call_log <- call_log %>%
     x_record_year  = if_else(is.na(x_record_year), lubridate::year(created_date), x_record_year)
   )
 
+# Check call hours - because we sometimes have problems with this
+call_hours_in_df <- sort(unique(call_log$call_hour))
+call_hours_expected <- c(8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18)
+if (!setequal(call_hours_in_df, call_hours_expected)) {
+  stop(
+    "There are unexpected call times in the call_log data. The following", 
+    "times were expected: ", paste(call_hours_expected, collapse = ", "), 
+    ". However, the following times appear in the data: ", 
+    paste(call_hours_in_df, collapse = ", "), "."
+  )
+}
+
+# Create a factor version of the call hour variable
+call_log <- call_log %>% 
+  mutate(call_hour_f = factor(call_hour, labels = c(
+    "08-08:59", "09-09:59", "10-10:59", "11-11:59", "12-12:59", "13-13:59", 
+    "14-14:59", "15-15:59", "16-16:59", "17-17:59", "18-18:59"
+  )))
 
 # Clean participant_scheduler
 # -----------------------------------------------------------------------------
