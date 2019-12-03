@@ -1,0 +1,83 @@
+---
+title: "Quick Look at Veteran Questions"
+date: "Created: 2019-12-03 <br> Updated: `r Sys.Date()`"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+    css: custom-css.css
+---
+
+Save this template file. Replace it when you upgrade versions of RStudio. Copy and Paste into:
+
+RStudio > Package Contents > Contents > Resources > resources > templates > r_markdown_notebook_osx.Rmd
+
+# Overview
+
+What is this file about? Months later, I should be able to glance at this section and know if the thing I'm looking for is in this file or not.
+
+
+# Load packages and data
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = NA)
+Sys.setenv(TZ = "US/Central")
+```
+
+```{r message=FALSE}
+library(dplyr)
+library(bfuncs)
+```
+
+```{r}
+demo <- DBI::dbReadTable(con, "SociodemographicInformation")
+sex <- DBI::dbReadTable(con, "ParticipantAnalytics")
+```
+
+```{r}
+df <- demo %>% left_join(select(sex, MedstarID, Sex), by = "MedstarID")
+```
+
+
+
+[top](#top)
+
+
+# Section 1
+
+```{r}
+df %>% 
+  group_by(SodeMilitary) %>% 
+  bfuncs::freq_table()
+```
+
+
+```{r}
+df %>% 
+  group_by(SodeMilitary, Sex) %>% 
+  bfuncs::freq_table()
+```
+
+```{r}
+df %>% 
+  filter(SodeMilitary == "Yes") %>% 
+  group_by(Sex, SodeUnwanted) %>% 
+  bfuncs::freq_table()
+```
+
+```{r}
+df %>% 
+  filter(SodeMilitary == "Yes") %>% 
+  group_by(SodeSexual) %>% 
+  bfuncs::freq_table()
+```
+
+
+[top](#top)
+
+
+# Session information
+
+```{r echo=FALSE}
+sessionInfo()
+```
