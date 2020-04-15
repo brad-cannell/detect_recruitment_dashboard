@@ -1,0 +1,283 @@
+---
+title: "Reporting Inclusion Data"
+date: "Created: 2020-04-15 <br> Updated: `r Sys.Date()`"
+---
+
+# Overview
+
+Need to collect and report data on sex/gender and race/ethnicity for my research performanc progress report (RPPR).
+
+Specifically, this information is to be plugged into section G.4 of the RPPR.
+
+Guidance on racial/ethnic categories: https://grants.nih.gov/grants/rppr/rppr_instruction_guide.pdf
+
+
+# Load packages
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = NA)
+Sys.setenv(TZ = "US/Central")
+```
+
+```{r message=FALSE}
+library(dplyr)
+library(flextable)
+library(officer)
+```
+
+
+# Load data
+
+```{r}
+# Open the Connection to the FM database
+# Keyring notes: https://db.rstudio.com/best-practices/managing-credentials/
+# Keychain error: https://github.com/r-lib/keyring/issues/45#issuecomment-332491293
+con <- DBI::dbConnect(
+  odbc::odbc(),
+  driver   = "/Library/ODBC/FileMaker ODBC.bundle/Contents/MacOS/FileMaker ODBC",
+  server   = "spsqlapwv003.sph.uthouston.edu",
+  database = "DETECT",
+  uid      = keyring::key_list("detect_fm_db_readonly")[1,2],
+  pwd      = keyring::key_get("detect_fm_db_readonly")
+)
+
+# Pull tables into R as data frames
+participant <- DBI::dbReadTable(con, "Participant")
+demo        <- DBI::dbReadTable(con, "SociodemographicInformation")
+
+# Close the connection to the database
+DBI::dbDisconnect(con)
+rm(con)
+```
+
+
+# Data management
+
+Merge sex from participant table into demographics table
+
+```{r}
+demo_nih <- demo %>% 
+  left_join(select(participant, MedstarID, Sex), by = "MedstarID")
+```
+
+Recode sex
+
+```{r}
+demo_nih <- demo_nih %>% 
+  mutate(
+    sex_nih = if_else(Sex == "Unknown (Unable To Determine)", NA_character_, Sex),
+    sex_nih = factor(sex_nih, levels = c("Female", "Male")),
+    sex_nih = forcats::fct_explicit_na(sex_nih, "Unknown/Not Reported")
+  )
+```
+
+Recode ethnicity
+
+```{r}
+demo_nih <- demo_nih %>% 
+  mutate(
+    ethnicity_nih = if_else(SodeHispanic == "Don't know", NA_character_, SodeHispanic),
+    ethnicity_nih = factor(
+      ethnicity_nih, 
+      levels = c("No", "Yes"),
+      labels = c("Not Hispanic or Latino", "Hispanic or Latino")
+    ),
+    ethnicity_nih = forcats::fct_explicit_na(ethnicity_nih, "Unknown/Not Reported")
+  )
+```
+
+Use race categories required by NIH   
+* American Indian or Alaska Native   
+* Asian   
+* Black or African American   
+* Native Hawaiian or Other Pacific Islander   
+* White   
+* More Than One Race   
+
+```{r}
+demo_nih <- demo_nih %>%
+  mutate(
+    race_nih = case_when(
+      is.na(SodeRace) ~ NA_character_,
+      SodeRace == "Other" ~ NA_character_,
+      # I'm not sure what the wierd ?? symbols are in "Don't know"
+      # I imagine it's a UTF-8 thing.
+      # Just using a regex to make NA for now.
+      stringr::str_detect(SodeRace, "know") ~ NA_character_,
+      SodeRace == "American Indian or Alaska Native" ~ 
+        "American Indian or Alaska Native",
+      SodeRace == "Asian" ~ "Asian",
+      SodeRace == "Black or African American" ~ "Black or African American",
+      SodeRace == "Native Hawaiian or Other Pacific Islander" ~ 
+        "Native Hawaiian or Other Pacific Islander",
+      SodeRace == "White" ~ "White",
+      TRUE ~ "More than One Race"
+    ),
+    race_nih = factor(
+      race_nih,
+      levels = c(
+        "American Indian or Alaska Native", "Asian", "Black or African American",
+        "White", "More than One Race"
+      )
+    ),
+    race_nih = forcats::fct_explicit_na(race_nih, "Unknown/Not Reported")
+  )
+```
+
+
+# Summarize demographic characteristics
+
+Sex
+
+```{r}
+demo_nih %>% 
+  freqtables::freq_table(sex_nih)
+```
+
+Ethnicity
+
+```{r}
+demo_nih %>% 
+  freqtables::freq_table(ethnicity_nih)
+```
+
+Race
+
+```{r}
+demo_nih %>% 
+  freqtables::freq_table(race_nih)
+```
+
+
+# NIH Format
+
+NIH uses this really weird table format. It is race by sex grouped by ethnicity.
+
+```{r}
+make_table_section <- function(cat) {
+  demo_nih %>% 
+    filter(ethnicity_nih == cat) %>% 
+    freqtables::freq_table(race_nih, sex_nih) %>% 
+    select(row_cat, col_cat, n) %>% 
+    tidyr::pivot_wider(
+      names_from = col_cat,
+      values_from = n
+    )
+}
+# For data checking
+# make_table_section("Not Hispanic or Latino")
+```
+
+Run over all levels of ethnicity
+
+```{r}
+table <- purrr::map_dfc(
+  .x = c("Not Hispanic or Latino", "Hispanic or Latino", "Unknown/Not Reported"),
+  .f = make_table_section
+)
+```
+
+Clean the table
+
+```{r}
+table <- table %>% 
+  select(-row_cat1, -row_cat2)
+```
+
+Add totals to table
+
+```{r}
+table <- table %>% 
+  # Add row totals
+  mutate(Total = rowSums(select(., -row_cat), na.rm = TRUE)) %>% 
+  # Add column totals
+  bind_rows(
+    summarise_all(., ~{
+      if(is.numeric(.)) sum(., na.rm = TRUE)
+      else "Total"
+    })
+  )
+```
+
+# Convert to flextable and add to Word document
+
+```{r}
+ft <- flextable(
+  # Set the "Total" column to integer to get "5" instead of "5.000"
+  table %>% 
+    mutate(Total = as.integer(Total))
+  ) %>% 
+  
+  # Remove 1 and 2 from current header labels
+  set_header_labels(
+    row_cat = "Racial Categories", Female1 = "Female", Male1 = "Male",
+    `Unknown/Not Reported1` = "Unknown/Not Reported", Female2 = "Female",
+    Male2 = "Male", `Unknown/Not Reported2` = "Unknown/Not Reported",
+    Total = ""
+  ) %>% 
+  
+  # Add new header labels
+  add_header_row(values = c(
+    "Racial Categories", "Not Hispanic or Latino", "", "", "Hispanic or Latino", 
+    "", "", "Unknown/Not Reported Ethnicity", "", "", "Total"
+  )) %>% 
+  add_header_row(values = c("Racial Categories", "Ethnic Categories", rep("", 9))) %>% 
+  
+  # Column width: Trial and error
+  # Make a table and play with properties
+  # Change the width of the firt column
+  width(j = 1, width = 1.43) %>% 
+  # Change the width of the "Female" and "Male" columns
+  width(j = c(2, 3, 5, 6, 8, 9, 11), width = 0.68) %>% 
+  # Change the width of the "Unknown" columns
+  width(j = c(4, 7, 10), width = 0.80) %>% 
+  
+  # Add border around all cells to match NIH Document
+  # Also, makes merging easier
+  theme_box() %>% 
+  
+  # Merge cells in header labels
+  # Racial Categories
+  merge_at(i = 1:3, j = 1, part = "header") %>% 
+  # Ethnic Categories
+  merge_at(i = 1, j = 2:11, part = "header") %>% 
+  # Hispanic labels
+  merge_at(i = 2, j = 2:4, part = "header") %>% 
+  merge_at(i = 2, j = 5:7, part = "header") %>% 
+  merge_at(i = 2, j = 8:10, part = "header") %>% 
+  
+  # Change font to times new roman 11
+  font(fontname = "Times New Roman", part = "all") %>%
+  fontsize(size = 11, part = "all") %>%
+  # Center column headings
+  align(align = "center", part = "header") %>% 
+  # Center body text
+  align(j = 2:11, align = "center", part = "body")
+
+# For checking
+# ft
+```
+
+```{r}
+doc <- read_docx("Word Template for Officer.docx") %>%
+  body_add_par("") %>% 
+  body_add_par("Cumulative (Actual)") %>% 
+  body_add_par("") %>% 
+  body_add_flextable(ft) %>% 
+  body_add_par("") %>%
+  body_add_par(paste("Updated: ", Sys.Date()))
+
+# Output Word document
+# Update the year and month in the file name dynamically
+print(
+  doc, 
+  paste(Sys.Date() %>% format("%Y-%m"), " Inclusion Enrollment Report.docx")
+)
+```
+
+
+# Session information
+
+```{r echo=FALSE}
+sessionInfo()
+```
