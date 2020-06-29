@@ -1,0 +1,110 @@
+---
+title: "DETECT Follow Up COVID Analysis"
+output: html_document
+---
+
+This is the R markdown file for the pre-COVID follow up analysis.
+
+#Load Packages
+```{r}
+library(dplyr)
+library(frequency)
+```
+
+#Load Data 
+```{r}
+gen_health <- read.csv(file = "/Users/jaredwiegand/detect_recruitment_dashboard/data/General Health.csv")
+
+people <- gen_health %>%
+  distinct(NameFull)
+
+#151 Total People
+```
+
+#How many people were given a follow up questionnaire pre-COVID?
+```{r}
+#COVID ~ Tarrant Co Shelter in Place March 24, 2020
+
+#https://www.nbcdfw.com/news/coronavirus/fort-worth-mayor-says-yall-stay-safe-yall-stay-healthy-yall-stay-home-stricter-response-coming-tuesday/2337225/
+
+pre_covid <- gen_health %>%
+  select(NameFull ,xCreatedTimestamp, xModifiedTimestamp, xRecordMonth, xRecordYear, xRecordStatus) %>%
+  distinct(NameFull, xRecordYear, xRecordMonth) %>%
+  arrange(xRecordYear, xRecordMonth)
+
+pre_covid_summary <- pre_covid %>%
+  group_by(xRecordYear, xRecordMonth) %>%
+  summarise(freq = n(),
+            percent = freq / 157)
+
+#It looks like 140 interviews were completed pre-COVID or 89.2% of your total interviews.
+
+pre_covid_people <- pre_covid %>%
+  subset(!(xRecordMonth == "June" )) %>%
+  distinct(NameFull)
+
+#135 people were interviewed before COVID.
+
+post_covid_people <- pre_covid %>%
+  subset((xRecordMonth == "June" )) %>%
+  distinct(NameFull)
+
+#17 people were interviewed after COVID.  This means 1 person was interviewed before and after COVID.
+
+pre_and_post_covid_people <- pre_covid %>%
+  subset((pre_covid$NameFull %in% pre_covid_people$NameFull & pre_covid$NameFull %in% post_covid_people$NameFull))
+
+#One person was interviewed twice before COVID and once after COVID.
+
+```
+
+#How many people were considered depressed based on the GDS?
+```{r}
+#A score >= 5 on the GDS classifies as depressed.
+
+gds_scores <- gen_health %>%
+  select(NameFull, xRecordMonth, xRecordYear ,DepresSatisfied:DepresEnergy) %>%
+  group_by(NameFull) %>%
+  mutate(
+    dq1 = ifelse(DepresSatisfied == "No", 1, 0),
+    dq2 = ifelse(DepresHopeless == "Yes", 1, 0),
+    dq3 = ifelse(DepresBetter == "Yes", 1, 0),
+    dq4 = ifelse(DepresActivities == "Yes", 1, 0),
+    dq5 = ifelse(DepresEmpty == "Yes", 1, 0),
+    dq6 = ifelse(DepresBored == "Yes", 1, 0),
+    dq7 = ifelse(DepresSpirits == "No", 1, 0),
+    dq8 = ifelse(DepresAfraid == "Yes", 1, 0),
+    dq9 = ifelse(DepresHappy == "No", 1, 0),
+    dq10 = ifelse(DepresHelpless == "Yes", 1, 0),
+    dq11 = ifelse(DepresHome == "Yes", 1, 0),
+    dq12 = ifelse(DepresMemory == "Yes", 1, 0),
+    dq13 = ifelse(DepresAlive == "No", 1, 0),
+    dq14 = ifelse(DepresWorthless == "Yes", 1, 0),
+    dq15 = ifelse(DepresEnergy == "No", 1, 0)
+  )
+
+#Having trouble getting rowSums to work with this, so I am doing it the harder way.
+gds_scores <- gds_scores %>%
+  select(NameFull, xRecordMonth, xRecordYear, dq1:dq15) %>%
+  mutate(dq_count = (dq1 + dq2 + dq3 + dq4 + dq5 + dq6 + dq7 + dq8 + dq9 + dq10 + dq11 + dq12 + dq13 + dq14 + dq15),
+         depressed_YN = ifelse(dq_count >= 5, 1, 0))
+
+freq(gds_scores$depressed_YN)
+
+#It looks like 72 or 45.9% of the follow up questionaires qualify as depressed.
+
+gds_count <- gds_scores %>%
+  select(NameFull, depressed_YN) %>%
+  distinct() %>%
+  group_by(NameFull) %>%
+  summarise(
+    count = n(),
+    dep_final = ifelse(count ==1, depressed_YN, 99)
+    )
+
+#99 represents if the individual had more than one conflicting gds depression conclusion.
+
+freq(gds_count$dep_final)
+
+#81 not depressed, 68 depressed, 2 indeterminate.
+```
