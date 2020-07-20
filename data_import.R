@@ -25,6 +25,7 @@ call_log              <- DBI::dbReadTable(con, "ParticipantCallLog")
 participant_scheduler <- DBI::dbReadTable(con, "ParticipantScheduler")
 gift_card             <- DBI::dbReadTable(con, "GiftCard")
 moca                  <- DBI::dbReadTable(con, "PhoneRecruitment")
+lead                  <- DBI::dbReadTable(con, "LeadPanelAssessment")
 
 # Close the connection to the database
 DBI::dbDisconnect(con)

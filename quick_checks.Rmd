@@ -1,0 +1,46 @@
+---
+title: "R Notebook"
+date: "2020-07-16"
+---
+
+# Overview
+
+Using this file to do some quick checks I'm interested in. Eventually, I need to add some of this to the dashboard.
+
+```{r}
+library(dplyr)
+library(readr)
+```
+
+# Load data
+
+Get on VPN first.
+
+```{r}
+source("data_import.R")
+```
+
+How many F/U's scheduled between 2020-06-15 and 2020-07-15
+
+```{r}
+scheduled_ids %>% 
+  filter(scheduled_date >= "2020-06-15" & scheduled_date < "2020-07-15")
+```
+
+It looks like we scheduled 28 F/U interviews.
+
+How many were scheduled in the month before COVID?
+
+```{r}
+scheduled_ids %>% 
+  filter(scheduled_date >= "2020-02-15" & scheduled_date < "2020-03-15")
+```
+
+How many LEAD panels done? How many positive?
+
+Look at Qualtrics data
+
+```{r}
+lead_qual <- read_csv("/Users/bradcannell/Desktop/DETECT+Lead+Panel+Assessment_July+16,+2020_08.52.csv")
+```
+
