@@ -155,7 +155,8 @@ means_by_day <- calls_per_day %>%
   filter(!Day %in% c("Saturday", "Sunday")) %>%
   summarise(
     mean = mean(n, na.rm = TRUE),
-    total = sum(n, na.rm = TRUE)
+    total = sum(n, na.rm = TRUE),
+    .groups = "drop"
   )
 ```
 
@@ -224,10 +225,11 @@ calls_per_day_plot <- calls_per_day_w_scheduled %>%
   ggplot(aes(Date, `N called`)) +
   geom_line(color = "#8a8a8a") +
   geom_point(aes(color = `N Scheduled`)) +
-  scale_x_date("Date", date_label = "%b-%d", 
+  scale_x_date("Date", date_label = "%Y-%b" 
     # Make sure the x-axis includes the earliest date and today with other breakes
     # coming at 1 week intervals.
-    breaks = seq(min(calls_per_day_w_scheduled$Date), Sys.Date(), "weeks")
+    # 2020-11-09: Commented out the breaks. It looked cluttered.
+    # breaks = seq(min(calls_per_day_w_scheduled$Date), Sys.Date(), "weeks")
   ) +
   scale_y_continuous("Number of Calls") +
   scale_color_manual(
@@ -244,19 +246,23 @@ plotly::ggplotly(calls_per_day_plot)
 > The points on the plot above are colored according to the number of follow-up interviews scheduled on a given day.     
 > Red = None, Blue = 1, Green = 2 or more.
 
-### Cumulative people and follow-up interviews scheduled
+### Ratio of number of scheduled F/U interviews to number of calls by day
 
 ```{r}
 calls_per_day_cum_plot <- cum_calls_and_scheduled %>% 
-  ggplot(aes(Date, n, col = group)) +
+  group_by(Date) %>% 
+  mutate(ratio = n[2] / n[1]) %>% 
+  filter(group == "Scheduled F/U Visits") %>% 
+  ggplot(aes(Date, ratio)) +
   geom_line() +
   geom_point() +
-  scale_x_date("Date", date_label = "%b-%d", 
+  scale_x_date("Date", date_label = "%Y-%b", 
     # Make sure the x-axis includes the earliest date and today with other breakes
     # coming at 1 week intervals.
-    breaks = seq(min(calls_per_day_w_scheduled$Date), Sys.Date(), "weeks")
+    # 2020-11-09: Commented out the breaks. It looked cluttered.
+    # breaks = seq(min(calls_per_day_w_scheduled$Date), Sys.Date(), "weeks")
   ) +
-  scale_y_continuous("Number of Calls") +
+  scale_y_continuous("Ratio of N Scheduled to N Calls") +
   scale_color_manual("", values = c("Black", "#6AA2E7")) +
   theme_bw()
 
@@ -282,7 +288,8 @@ calls_per_day_w_scheduled %>%
     `Percent Scheduled` = ((`F/U Interviews Scheduled` / `Calls Made`) * 100) %>% 
       round(1) %>% 
       format(nsmall = 1) %>% 
-      paste0("%")
+      paste0("%"),
+    .groups = "drop"
   ) %>% 
   knitr::kable(align = c("l", "c", "c", "c"))
 ```
