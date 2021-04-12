@@ -1,0 +1,88 @@
+---
+title: "MedStar Invoices Over Time"
+date: "2021-04-08"
+---
+
+```{r}
+library(dplyr, warn.conflicts = FALSE)
+library(readxl, warn.conflicts = FALSE)
+library(purrr, warn.conflicts = FALSE)
+library(ggplot2, warn.conflicts = FALSE)
+library(patchwork, warn.conflicts = FALSE)
+```
+
+```{r}
+walk2(
+  .x = c("Yr 1 voucher details", "Yr 2 voucher details ", "Yr 3 voucher details "),
+  .y = c("y1", "y2", "y3"),
+  .f = function(x, y) {
+    assign(y, read_excel("data/Subcontracts Summary_14184.xlsx", sheet = x), envir = .GlobalEnv)
+  }
+)
+```
+
+```{r}
+df <- y1 %>% 
+  bind_rows(y2) %>% 
+  bind_rows(y3)
+```
+
+```{r}
+df %>% 
+  count(Subcontract)
+```
+
+```{r}
+ms <- df %>% 
+  filter(Subcontract == "MedStar") %>% 
+  mutate(Date = `Date received`)
+```
+
+```{r}
+ms %>% 
+  select(`Date received`, `Period Covered`, Amount)
+```
+
+2020-06-18: Budget: Desiree says that she calculated the year-to-date expenditures so far. After adjusting for COVID and not performing nearly as many follow-up interviews as we wanted, we are still on pace to go over budget. Desiree said that she spoke to Matt about this and they are planning to make some efficiency adjustments and also adjust the billing rate for the follow-up screenings.
+
+```{r}
+p1 <- ggplot(ms, aes(Date, Amount)) +
+  geom_line() +
+  geom_point() +
+  geom_vline(xintercept = as.POSIXct("2020-06-18"), color = "red") +
+  theme_classic()
+```
+
+Let's overlay this with calls and scheduled. Just manually run the code in index.Rmd.
+
+```{r}
+p2 <- ggplot(scheduled_per_day, aes(Date, n_scheduled)) +
+  geom_line() + 
+  theme_classic()
+```
+
+```{r}
+p1 + p2
+```
+
+
+```{r}
+calls_per_day_w_scheduled %>% 
+  ggplot(aes(Date, `N called`)) +
+  geom_line(color = "#8a8a8a") +
+  geom_point(aes(color = `N Scheduled`)) +
+  scale_x_date("Date", date_label = "%Y-%b" 
+    # Make sure the x-axis includes the earliest date and today with other breakes
+    # coming at 1 week intervals.
+    # 2020-11-09: Commented out the breaks. It looked cluttered.
+    # breaks = seq(min(calls_per_day_w_scheduled$Date), Sys.Date(), "weeks")
+  ) +
+  scale_y_continuous("Number of Calls") +
+  scale_color_manual(
+    "F/U Scheduled", 
+    values = c("#a60303", "#6AA2E7", "#03a606"),
+    drop = FALSE
+  ) +
+  theme_bw() +
+  theme(legend.title = element_text(size = 8))
+```
