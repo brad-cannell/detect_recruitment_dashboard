@@ -1,0 +1,81 @@
+---
+title: "Brandon Nussbaum- DETECT Dashboard Update"
+output: 
+  flexdashboard::flex_dashboard:
+    vertical_layout: scroll
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(lubridate)
+library(tibble)
+```
+
+
+```{r data}
+source("data_import.R")
+```
+
+
+```{r}
+calls_per_day <- call_log %>%
+  count(call_date) %>% 
+  # Fill-in missing days with zero
+  complete(call_date = seq(call_date[1], Sys.Date(), by = "1 day"), fill = list(n = 0)) %>% 
+  # Add call day variable
+  mutate(
+    day = weekdays(call_date),
+    day = forcats::fct_relevel(day, "Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
+  ) %>% 
+  # Improve plot readability
+  rename(
+    Date = call_date,
+    Day = day 
+  ) %>% 
+  filter(Day!='Saturday' & Day!='Sunday') %>%
+  mutate(
+    date = as.numeric(Day)
+    )
+
+calls_per_day[3,"week_num"] = 1
+for (i in seq(8, nrow(calls_per_day), 5)) {
+  calls_per_day[i,"week_num"] = calls_per_day[i-5,"week_num"] + 1
+} 
+
+calls_per_day %>%
+  fill(week_num) %>%
+  filter(week_num == max(week_num, na.rm = T)-2) %>%
+  summarise(
+    `Total Calls Made 2 Weeks Ago` = sum(n)
+  ) %>%
+  knitr::kable(align='l') 
+```
+
+```{r}
+calls_per_day %>%
+  fill(week_num) %>%
+  filter(week_num == max(week_num, na.rm = T)-1) %>%
+  summarise(
+    `Total Calls Made Last Week` = sum(n)
+  ) %>%
+  knitr::kable(align = 'l') 
+```
+
+```{r}
+calls_per_day %>%
+  fill(week_num) %>%
+  filter(week_num == max(week_num, na.rm = T)-1 | week_num == max(week_num, na.rm = T)-2 ) %>%
+  group_by(week_num) %>%
+summarise(
+    `Totals` = sum(n)
+  ) %>% ungroup() %>%
+  mutate(`% Change Between Two Weeks Ago and Last Week` = ((Totals/lag(Totals)) * 100) %>%
+           round(1) %>%
+           paste0("%")) %>%
+  filter(`% Change Between Two Weeks Ago and Last Week` != "NA%") %>%
+  select(`% Change Between Two Weeks Ago and Last Week`) %>%
+  knitr::kable(align='l') 
+```
