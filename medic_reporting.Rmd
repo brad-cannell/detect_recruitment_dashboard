@@ -1,0 +1,73 @@
+---
+title: "Medic Reporting"
+date: "Created: 2021-04-15 <br> Updated: `r Sys.Date()`"
+---
+
+Discussing medic reporting with Chad via email on 2021-04-15
+
+```{r message=FALSE}
+library(dplyr)
+library(freqtables)
+```
+
+Everything we import in from Medstar will be in the Participant.csv file. This will include the initial DETECT screenings done by the responding medic (#1).
+
+The follow-up DETECT screenings done by the medics for the research study (#2) will be captured in the Observational Measures.csv file.
+
+```{r}
+# Open the Connection to the FM database
+# Keyring notes: https://db.rstudio.com/best-practices/managing-credentials/
+# Keychain error: https://github.com/r-lib/keyring/issues/45#issuecomment-332491293
+con <- DBI::dbConnect(
+  odbc::odbc(),
+  driver   = "/Library/ODBC/FileMaker ODBC.bundle/Contents/MacOS/FileMaker ODBC",
+  server   = "spsqlapwv003.sph.uthouston.edu",
+  database = "DETECT",
+  uid      = keyring::key_list("detect_fm_db_readonly")[1,2],
+  pwd      = keyring::key_get("detect_fm_db_readonly")
+)
+
+# Pull tables into R as data frames
+participant <- DBI::dbReadTable(con, "Participant")
+
+# Close the connection to the database
+DBI::dbDisconnect(con)
+rm(con)
+```
+
+How many any yes?
+
+```{r}
+detect <- participant %>% 
+  select(MedstarID, xUnusualOdor:xApsReportedConfirmationNumber)
+```
+
+```{r}
+detect <- detect %>% 
+  mutate(
+    across(
+      .cols  = xUnusualOdor:xUnmetNeeds,
+      .fns   = ~ .x == "Yes",
+      .names = "{col}_yes"
+    )
+  ) %>% 
+  rowwise() %>% 
+  mutate(n_yes = sum(c_across(ends_with("_yes")), na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  mutate(any_yes = n_yes > 0)
+```
+
+```{r}
+detect %>% 
+  freq_table(any_yes)
+```
+
+How many report yes?
+
+```{r}
+detect %>% 
+  freq_table(any_yes, xApsReported) %>% 
+  select(row_var:percent_total, percent_row)
+```
+
+So, 62% of any_yes are not being reported.
