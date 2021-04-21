@@ -70,7 +70,22 @@ calls_per_day <- call_log %>%
   rename(
     Date = call_date,
     Day = day
+  ) %>% 
+  filter(Day!='Saturday' & Day!='Sunday') %>%
+  mutate(
+    day_num = as.numeric(Day)
   )
+```
+
+```{r}
+# Adds a new column to calls-per_day that iteratively counts the week number.
+# Start week 1 on the first Monday in the data
+calls_per_day[3,"week_num"] = 1
+
+# Starting at the 8th row, and incrementing by 5, count week number up by 1 on each Monday
+for (i in seq(8, nrow(calls_per_day), 5)) {
+  calls_per_day[i,"week_num"] = calls_per_day[i-5,"week_num"] + 1
+} 
 ```
 
 ```{r}
@@ -214,6 +229,19 @@ valueBox(scheduled_message, icon = "fa-phone")
 mean_calls <- call_log %>% count(medstar_id) %>% summarise(mean = mean(n)) %>% round(1)
 valueBox(mean_calls, icon = "fa-phone")
 ```
+
+### Total calls made 2 weeks ago
+
+```{r}
+total_calls_2_weeks <- calls_per_day %>%
+  fill(week_num) %>%
+  filter(week_num == max(week_num, na.rm = T) - 2) %>%
+  summarise(
+    total_calls = sum(n)
+  )
+valueBox(total_calls_2_weeks, icon = "fa-phone")
+```
+
 
 Plots {data-width=750}
 -----------------------------------------------------------------------
