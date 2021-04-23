@@ -242,6 +242,38 @@ total_calls_2_weeks <- calls_per_day %>%
 valueBox(total_calls_2_weeks, icon = "fa-phone")
 ```
 
+### Total calls made last week
+
+```{r}
+total_calls_last_week <- calls_per_day %>%
+  fill(week_num) %>%
+  filter(week_num == max(week_num, na.rm = T)-1) %>%
+  summarise(
+    total_calls = sum(n)
+  )
+valueBox(total_calls_last_week, icon = "fa-phone")
+```
+
+### Percent change between two weeks ago and last week
+
+```{r}
+pct_change <- calls_per_day %>%
+  fill(week_num) %>%
+  filter(week_num == max(week_num, na.rm = T)-1 | week_num == max(week_num, na.rm = T)-2 ) %>%
+  group_by(week_num) %>%
+summarise(
+    `Totals` = sum(n)
+  ) %>% ungroup() %>%
+  mutate(`% Change Between Two Weeks Ago and Last Week` = ((Totals/lag(Totals)) * 100) %>%
+           round(1) %>%
+           paste0("%")) %>%
+  filter(`% Change Between Two Weeks Ago and Last Week` != "NA%") %>%
+  select(`% Change Between Two Weeks Ago and Last Week`)
+
+valueBox(pct_change, icon = "fa-phone")
+```
+
+
 
 Plots {data-width=750}
 -----------------------------------------------------------------------
