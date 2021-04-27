@@ -16,8 +16,8 @@ con <- DBI::dbConnect(
   driver   = "/Library/ODBC/FileMaker ODBC.bundle/Contents/MacOS/FileMaker ODBC",
   server   = "spsqlapwv003.sph.uthouston.edu",
   database = "DETECT",
-  uid      = keyring::key_list("detect_fm_db_readonly")[1,2],
-  pwd      = keyring::key_get("detect_fm_db_readonly")
+  uid      = 'brannuss',
+  pwd      = 'Badnnsbu#2021'
 )
 
 # Pull tables into R as data frames
@@ -181,4 +181,4 @@ readr::write_csv(moca_deid, "data/moca_deid.csv")
 
 # Clean up
 # -----------------------------------------------------------------------------
-rm(make_posixct, participant_scheduler, gift_card, moca)
+rm(make_posixct, participant_scheduler, moca)

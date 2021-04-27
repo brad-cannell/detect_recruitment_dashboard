@@ -3,7 +3,7 @@ title: "DETECT Recruiting Dashboard"
 # date: "Updated: `r Sys.Date()`"
 output: 
   flexdashboard::flex_dashboard:
-    orientation: column
+    orientation: rows
     vertical_layout: fill
 ---
 
@@ -131,6 +131,33 @@ calls_per_day_w_scheduled <- calls_per_day %>%
 ```
 
 ```{r}
+followups <- gift_card %>%
+  mutate(followup_date = as.Date(x_created_timestamp, format = "%m/%d/%Y")) %>%
+  count(followup_date)%>% 
+  # Fill-in missing days with zero
+  complete(followup_date = seq(followup_date[1], Sys.Date(), by = "1 day"), fill = list(n = 0)) %>% 
+  mutate(
+    day = weekdays(followup_date),
+    day = forcats::fct_relevel(day, "Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
+  ) %>% 
+    rename(
+    Date = followup_date,
+    Day = day 
+  ) %>% 
+  filter(Day!='Saturday' & Day!='Sunday') %>%
+  mutate(
+    date = as.numeric(Day)
+    )
+
+followups[3,"week_num"] = 1
+for (i in seq(8, nrow(followups), 5)) {
+  followups[i,"week_num"] = followups[i-5,"week_num"] + 1
+} 
+
+```
+
+
+```{r}
 # Data check
 # At this point, both should be zero. We aren't making calls on the weekend. 
 # A number > 0 indicates a data entry error.
@@ -183,7 +210,38 @@ Overview
 
 Updated: `r Sys.Date()`
 
-Value boxes {data-width=250}
+Plots {data-width=750}
+-----------------------------------------------------------------------
+
+### Recruiting calls made and follow-up interviews scheduled by date
+
+```{r}
+calls_per_day_plot <- calls_per_day_w_scheduled %>% 
+  ggplot(aes(Date, `N called`)) +
+  geom_line(color = "#8a8a8a") +
+  geom_point(aes(color = `N Scheduled`)) +
+  scale_x_date("Date", date_label = "%Y-%b" 
+    # Make sure the x-axis includes the earliest date and today with other breakes
+    # coming at 1 week intervals.
+    # 2020-11-09: Commented out the breaks. It looked cluttered.
+    # breaks = seq(min(calls_per_day_w_scheduled$Date), Sys.Date(), "weeks")
+  ) +
+  scale_y_continuous("Number of Calls") +
+  scale_color_manual(
+    "F/U Scheduled", 
+    values = c("#a60303", "#6AA2E7", "#03a606"),
+    drop = FALSE
+  ) +
+  theme_bw() +
+  theme(legend.title = element_text(size = 8))
+
+plotly::ggplotly(calls_per_day_plot)
+```
+
+> The points on the plot above are colored according to the number of follow-up interviews scheduled on a given day.     
+> Red = None, Blue = 1, Green = 2 or more.
+
+Value boxes (1) {data-width=250}
 -----------------------------------------------------------------------
 
 ### Total follow-up interviews completed
@@ -230,6 +288,9 @@ mean_calls <- call_log %>% count(medstar_id) %>% summarise(mean = mean(n)) %>% r
 valueBox(mean_calls, icon = "fa-phone")
 ```
 
+Value boxes (2) {data-width=250}
+-----------------------------------------------------------------------
+
 ### Total calls made 2 weeks ago
 
 ```{r}
@@ -273,61 +334,31 @@ summarise(
 valueBox(pct_change, icon = "fa-phone")
 ```
 
-
-
-Plots {data-width=750}
------------------------------------------------------------------------
-
-### Recruiting calls made and follow-up interviews scheduled by date
+### Total followup interviews made 2 weeks ago
 
 ```{r}
-calls_per_day_plot <- calls_per_day_w_scheduled %>% 
-  ggplot(aes(Date, `N called`)) +
-  geom_line(color = "#8a8a8a") +
-  geom_point(aes(color = `N Scheduled`)) +
-  scale_x_date("Date", date_label = "%Y-%b" 
-    # Make sure the x-axis includes the earliest date and today with other breakes
-    # coming at 1 week intervals.
-    # 2020-11-09: Commented out the breaks. It looked cluttered.
-    # breaks = seq(min(calls_per_day_w_scheduled$Date), Sys.Date(), "weeks")
-  ) +
-  scale_y_continuous("Number of Calls") +
-  scale_color_manual(
-    "F/U Scheduled", 
-    values = c("#a60303", "#6AA2E7", "#03a606"),
-    drop = FALSE
-  ) +
-  theme_bw() +
-  theme(legend.title = element_text(size = 8))
+total_followups_2_weeks <- followups %>%
+  fill(week_num) %>%
+  filter(week_num == max(week_num, na.rm = T)-2) %>%
+  summarise(
+    `Total Follow-up Interviews Made 2 Weeks Ago` = sum(n)
+  )
 
-plotly::ggplotly(calls_per_day_plot)
+valueBox(total_followups_2_weeks, icon = "fa-phone")
 ```
 
-> The points on the plot above are colored according to the number of follow-up interviews scheduled on a given day.     
-> Red = None, Blue = 1, Green = 2 or more.
-
-### Ratio of number of scheduled F/U interviews to number of calls by day
+### Total followup interviews made last week
 
 ```{r}
-calls_per_day_cum_plot <- cum_calls_and_scheduled %>% 
-  group_by(Date) %>% 
-  mutate(ratio = n[2] / n[1]) %>% 
-  filter(group == "Scheduled F/U Visits") %>% 
-  ggplot(aes(Date, ratio)) +
-  geom_line() +
-  geom_point() +
-  scale_x_date("Date", date_label = "%Y-%b", 
-    # Make sure the x-axis includes the earliest date and today with other breakes
-    # coming at 1 week intervals.
-    # 2020-11-09: Commented out the breaks. It looked cluttered.
-    # breaks = seq(min(calls_per_day_w_scheduled$Date), Sys.Date(), "weeks")
-  ) +
-  scale_y_continuous("Ratio of N Scheduled to N Calls") +
-  scale_color_manual("", values = c("Black", "#6AA2E7")) +
-  theme_bw()
-
-plotly::ggplotly(calls_per_day_cum_plot)
+total_followups_last_week <- followups %>%
+  fill(week_num) %>%
+  filter(week_num == max(week_num, na.rm = T)-1) %>%
+  summarise(
+    total_calls = sum(n)
+  )
+valueBox(total_followups_last_week, icon = "fa-phone")
 ```
+
 
 Call Timing {data-orientation=rows}
 =======================================================================

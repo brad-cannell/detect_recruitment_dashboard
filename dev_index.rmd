@@ -19,6 +19,7 @@ library(tibble)
 source("data_import.R")
 ```
 
+### Calls Made 2 Weeks Ago
 
 ```{r}
 calls_per_day <- call_log %>%
@@ -54,6 +55,9 @@ calls_per_day %>%
   knitr::kable(align='l') 
 ```
 
+### Calls Made Last Week
+
+
 ```{r}
 calls_per_day %>%
   fill(week_num) %>%
@@ -63,6 +67,8 @@ calls_per_day %>%
   ) %>%
   knitr::kable(align = 'l') 
 ```
+
+##Percent Change Between Last Week and Two Weeks Ago
 
 ```{r}
 calls_per_day %>%
@@ -79,3 +85,79 @@ summarise(
   select(`% Change Between Two Weeks Ago and Last Week`) %>%
   knitr::kable(align='l') 
 ```
+
+### Highest Number of calls made in any week
+```{r}
+max_calls_func = function(x) {
+  max_calls = calls_per_day %>%
+  fill(week_num) %>%
+    filter(week_num == x) %>%
+    select(n) %>%
+    max()
+  print(paste0("Highest Number of Calls Made During Week ", x, ": ", max_calls))
+}
+
+
+max_calls_func(2)
+
+```
+
+### Number of Followup Interviews Two Weeks ago
+```{r}
+followups <- gift_card %>%
+  mutate(followup_date = as.Date(x_created_timestamp, format = "%m/%d/%Y")) %>%
+  count(followup_date)%>% 
+  # Fill-in missing days with zero
+  complete(followup_date = seq(followup_date[1], Sys.Date(), by = "1 day"), fill = list(n = 0)) %>% 
+  mutate(
+    day = weekdays(followup_date),
+    day = forcats::fct_relevel(day, "Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
+  ) %>% 
+    rename(
+    Date = followup_date,
+    Day = day 
+  ) %>% 
+  filter(Day!='Saturday' & Day!='Sunday') %>%
+  mutate(
+    date = as.numeric(Day)
+    )
+
+followups[3,"week_num"] = 1
+for (i in seq(8, nrow(followups), 5)) {
+  followups[i,"week_num"] = followups[i-5,"week_num"] + 1
+} 
+
+
+followups %>%
+  fill(week_num) %>%
+  filter(week_num == max(week_num, na.rm = T)-2) %>%
+  summarise(
+    `Total Follow-up Interviews Made 2 Weeks Ago` = sum(n)
+  ) %>%
+  knitr::kable(align='l') 
+```
+
+### Number of Followup Interviews Last Week
+```{r}
+followups %>%
+  fill(week_num) %>%
+  filter(week_num == max(week_num, na.rm = T)-1) %>%
+  summarise(
+    `Total Follow-up Interviews Made Last Week` = sum(n)
+  ) %>%
+  knitr::kable(align = 'l') 
+```
+
+### Highest Number of Follow-up Interviews Scheduled in Any week
+```{r}
+max_followups_func = function(x) {
+  max_followups = followups %>%
+  fill(week_num) %>%
+    filter(week_num == x) %>%
+    select(n) %>%
+    max()
+  print(paste0("Highest Number of Follow-Up Interviews Made During Week ", x, ": ", max_followups))
+}
+```
+
+
