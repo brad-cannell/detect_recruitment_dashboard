@@ -210,7 +210,7 @@ Overview
 
 Updated: `r Sys.Date()`
 
-Plots {data-width=750}
+Plots {data-width=550}
 -----------------------------------------------------------------------
 
 ### Recruiting calls made and follow-up interviews scheduled by date
@@ -241,7 +241,7 @@ plotly::ggplotly(calls_per_day_plot)
 > The points on the plot above are colored according to the number of follow-up interviews scheduled on a given day.     
 > Red = None, Blue = 1, Green = 2 or more.
 
-Value boxes (1) {data-width=250}
+Value boxes (1) {data-width=150}
 -----------------------------------------------------------------------
 
 ### Total follow-up interviews completed
@@ -281,15 +281,14 @@ scheduled_message <- paste("1 per", rate_scheduled, "calls")
 valueBox(scheduled_message, icon = "fa-phone")
 ```
 
+Value boxes (2) {data-width=150}
+-----------------------------------------------------------------------
 ### Average number of calls made to each patient
 
 ```{r}
 mean_calls <- call_log %>% count(medstar_id) %>% summarise(mean = mean(n)) %>% round(1)
 valueBox(mean_calls, icon = "fa-phone")
 ```
-
-Value boxes (2) {data-width=250}
------------------------------------------------------------------------
 
 ### Total calls made 2 weeks ago
 
@@ -325,7 +324,7 @@ pct_change <- calls_per_day %>%
 summarise(
     `Totals` = sum(n)
   ) %>% ungroup() %>%
-  mutate(`% Change Between Two Weeks Ago and Last Week` = ((Totals/lag(Totals)) * 100) %>%
+  mutate(`% Change Between Two Weeks Ago and Last Week` = (((Totals-lag(Totals)) / Totals) * 100) %>%
            round(1) %>%
            paste0("%")) %>%
   filter(`% Change Between Two Weeks Ago and Last Week` != "NA%") %>%
@@ -334,7 +333,22 @@ summarise(
 valueBox(pct_change, icon = "fa-phone")
 ```
 
-### Total followup interviews made 2 weeks ago
+### Highest number of calls made in any week
+```{r}
+highest_calls <- calls_per_day %>%
+  fill(week_num) %>%
+  group_by(week_num) %>%
+  summarise(week_calls = sum(n)) %>%
+  ungroup() %>%
+  summarise(max(week_calls))
+           
+valueBox(highest_calls, icon = "fa-phone")
+```
+
+Value boxes (3) {data-width=150}
+-----------------------------------------------------------------------
+
+### Total followup interviews scheduled 2 weeks ago
 
 ```{r}
 total_followups_2_weeks <- followups %>%
@@ -347,7 +361,7 @@ total_followups_2_weeks <- followups %>%
 valueBox(total_followups_2_weeks, icon = "fa-phone")
 ```
 
-### Total followup interviews made last week
+### Total followup interviews scheduled last week
 
 ```{r}
 total_followups_last_week <- followups %>%
@@ -360,7 +374,21 @@ valueBox(total_followups_last_week, icon = "fa-phone")
 ```
 
 
-Call Timing {data-orientation=rows}
+## Highest number of followup interviews scheduled in any week
+```{r}
+highest_followups <- followups %>%
+  fill(week_num) %>%
+  group_by(week_num) %>%
+  summarise(week_followups = sum(n)) %>%
+  ungroup() %>%
+  summarise(max(week_followups))
+           
+valueBox(highest_followups, icon = "fa-phone")
+```
+
+
+
+Call Timing {data-orientation=columns}
 =======================================================================
 
 Updated: `r Sys.Date()`
