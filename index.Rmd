@@ -210,37 +210,6 @@ Overview
 
 Updated: `r Sys.Date()`
 
-Plots {data-width=550}
------------------------------------------------------------------------
-
-### Recruiting calls made and follow-up interviews scheduled by date
-
-```{r}
-calls_per_day_plot <- calls_per_day_w_scheduled %>% 
-  ggplot(aes(Date, `N called`)) +
-  geom_line(color = "#8a8a8a") +
-  geom_point(aes(color = `N Scheduled`)) +
-  scale_x_date("Date", date_label = "%Y-%b" 
-    # Make sure the x-axis includes the earliest date and today with other breakes
-    # coming at 1 week intervals.
-    # 2020-11-09: Commented out the breaks. It looked cluttered.
-    # breaks = seq(min(calls_per_day_w_scheduled$Date), Sys.Date(), "weeks")
-  ) +
-  scale_y_continuous("Number of Calls") +
-  scale_color_manual(
-    "F/U Scheduled", 
-    values = c("#a60303", "#6AA2E7", "#03a606"),
-    drop = FALSE
-  ) +
-  theme_bw() +
-  theme(legend.title = element_text(size = 8))
-
-plotly::ggplotly(calls_per_day_plot)
-```
-
-> The points on the plot above are colored according to the number of follow-up interviews scheduled on a given day.     
-> Red = None, Blue = 1, Green = 2 or more.
-
 Value boxes (1) {data-width=150}
 -----------------------------------------------------------------------
 
@@ -334,6 +303,7 @@ valueBox(pct_change, icon = "fa-phone")
 ```
 
 ### Highest number of calls made in any week
+
 ```{r}
 highest_calls <- calls_per_day %>%
   fill(week_num) %>%
@@ -385,6 +355,37 @@ highest_followups <- followups %>%
            
 valueBox(highest_followups, icon = "fa-phone")
 ```
+
+Plots {data-width=550}
+-----------------------------------------------------------------------
+
+### Recruiting calls made and follow-up interviews scheduled by date
+
+```{r}
+calls_per_day_plot <- calls_per_day_w_scheduled %>% 
+  ggplot(aes(Date, `N called`)) +
+  geom_line(color = "#8a8a8a") +
+  geom_point(aes(color = `N Scheduled`)) +
+  scale_x_date("Date", date_label = "%Y-%b" 
+    # Make sure the x-axis includes the earliest date and today with other breakes
+    # coming at 1 week intervals.
+    # 2020-11-09: Commented out the breaks. It looked cluttered.
+    # breaks = seq(min(calls_per_day_w_scheduled$Date), Sys.Date(), "weeks")
+  ) +
+  scale_y_continuous("Number of Calls") +
+  scale_color_manual(
+    "F/U Scheduled", 
+    values = c("#a60303", "#6AA2E7", "#03a606"),
+    drop = FALSE
+  ) +
+  theme_bw() +
+  theme(legend.title = element_text(size = 8))
+
+plotly::ggplotly(calls_per_day_plot)
+```
+
+> The points on the plot above are colored according to the number of follow-up interviews scheduled on a given day.     
+> Red = None, Blue = 1, Green = 2 or more.
 
 
 
