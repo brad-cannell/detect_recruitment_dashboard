@@ -6,6 +6,10 @@ output:
     orientation: rows
     vertical_layout: scroll
 ---
+<!-- 
+For testing
+rmarkdown::render("test.Rmd")
+-->
 
 <!-- 
 When refreshing, download the following to desktop:
@@ -79,13 +83,31 @@ calls_per_day <- call_log %>%
 
 ```{r}
 # Adds a new column to calls-per_day that iteratively counts the week number.
+# Set the very first value in week_num equal to 0. Week 1 will start on the 
 # Start week 1 on the first Monday in the data
-calls_per_day[3,"week_num"] = 1
+calls_per_day[1, "week_num"] <- 0
+calls_per_day[3, "week_num"] <- 1
 
 # Starting at the 8th row, and incrementing by 5, count week number up by 1 on each Monday
 for (i in seq(8, nrow(calls_per_day), 5)) {
   calls_per_day[i,"week_num"] = calls_per_day[i-5,"week_num"] + 1
 } 
+
+# Carry week number forward across rows
+calls_per_day <- calls_per_day %>% 
+  fill(week_num)
+```
+
+```{r}
+# Variables to help calculate calls made this week, calls made two weeks ago, 
+# and the percent change.
+# Identify last week (i.e., the Monday of the most recent complete Monday-Sunday)
+# Identify two weeks ago (i.e., the Monday before that)
+calls_per_day <- calls_per_day %>% 
+  mutate(
+    last_week = week_num == max(week_num, na.rm = T) - 1,
+    two_weeks_ago = week_num == max(week_num, na.rm = T) - 2
+  )
 ```
 
 ```{r}
@@ -260,15 +282,14 @@ mean_calls <- call_log %>% count(medstar_id) %>% summarise(mean = mean(n)) %>% r
 valueBox(mean_calls, icon = "fa-phone")
 ```
 
+<!-- Calls made 2 weeks ago, last week, and the percentage change -->
+
 ### Total calls made 2 weeks ago
 
 ```{r}
 total_calls_2_weeks <- calls_per_day %>%
-  fill(week_num) %>%
-  filter(week_num == max(week_num, na.rm = T) - 2) %>%
-  summarise(
-    total_calls = sum(n)
-  )
+  filter(two_weeks_ago) %>%
+  summarise(sum(n))
 valueBox(total_calls_2_weeks, icon = "fa-phone")
 ```
 
@@ -276,31 +297,17 @@ valueBox(total_calls_2_weeks, icon = "fa-phone")
 
 ```{r}
 total_calls_last_week <- calls_per_day %>%
-  fill(week_num) %>%
-  filter(week_num == max(week_num, na.rm = T)-1) %>%
-  summarise(
-    total_calls = sum(n)
-  )
+  filter(last_week) %>%
+  summarise(sum(n))
 valueBox(total_calls_last_week, icon = "fa-phone")
 ```
 
 ### Percent change between two weeks ago and last week
 
 ```{r}
-pct_change <- calls_per_day %>%
-  fill(week_num) %>%
-  filter(week_num == max(week_num, na.rm = T)-1 | week_num == max(week_num, na.rm = T)-2 ) %>%
-  group_by(week_num) %>%
-summarise(
-    `Totals` = sum(n)
-  ) %>% ungroup() %>%
-  mutate(`% Change Between Two Weeks Ago and Last Week` = (((Totals-lag(Totals)) / Totals) * 100) %>%
-           round(1) %>%
-           paste0("%")) %>%
-  filter(`% Change Between Two Weeks Ago and Last Week` != "NA%") %>%
-  select(`% Change Between Two Weeks Ago and Last Week`)
-
-valueBox(pct_change, icon = "fa-phone")
+pct_change <- (total_calls_last_week - total_calls_2_weeks) / total_calls_2_weeks * 100
+pct_change_chr <- round(pct_change) %>% paste0("%")
+valueBox(pct_change_chr, icon = "fa-phone")
 ```
 
 ### Highest number of calls made in any week
