@@ -95,7 +95,7 @@ calls_per_day <- calls_per_day %>%
 ```
 
 ```{r}
-# Variables to help calculate calls made this week, calls made two weeks ago, 
+# Variables to help calculate calls made last week, calls made two weeks ago, 
 # and the percent change.
 # Identify last week (i.e., the Monday of the most recent complete Monday-Sunday)
 # Identify two weeks ago (i.e., the Monday before that)
@@ -149,6 +149,7 @@ calls_per_day_w_scheduled <- calls_per_day %>%
 ```
 
 ```{r}
+# Calculate summary statistics about followups made that will be used in the charts below
 followups <- gift_card %>%
   mutate(followup_date = as.Date(x_created_timestamp, format = "%m/%d/%Y")) %>%
   count(followup_date)%>% 
@@ -172,6 +173,23 @@ for (i in seq(8, nrow(followups), 5)) {
   followups[i,"week_num"] = followups[i-5,"week_num"] + 1
 } 
 
+# Carry week number forward across rows
+followups <- followups %>%
+  fill(week_num)
+
+```
+
+
+```{r}
+# Variables to help calculate followups made last week, followups made two weeks ago, 
+# and the percent change.
+# Identify last week (i.e., the Monday of the most recent complete Monday-Sunday)
+# Identify two weeks ago (i.e., the Monday before that)
+followups <- followups %>% 
+  mutate(
+    last_week = week_num == max(week_num, na.rm = T) - 1,
+    two_weeks_ago = week_num == max(week_num, na.rm = T) - 2
+  )
 ```
 
 
@@ -310,7 +328,6 @@ valueBox(pct_change_chr, icon = "fa-phone")
 
 ```{r}
 highest_calls <- calls_per_day %>%
-  fill(week_num) %>%
   group_by(week_num) %>%
   summarise(week_calls = sum(n)) %>%
   ungroup() %>%
@@ -326,12 +343,8 @@ Value boxes (3) {data-width=150}
 
 ```{r}
 total_followups_2_weeks <- followups %>%
-  fill(week_num) %>%
-  filter(week_num == max(week_num, na.rm = T)-2) %>%
-  summarise(
-    `Total Follow-up Interviews Made 2 Weeks Ago` = sum(n)
-  )
-
+  filter(two_weeks_ago) %>%
+  summarise(sum(n))
 valueBox(total_followups_2_weeks, icon = "fa-phone")
 ```
 
@@ -339,19 +352,16 @@ valueBox(total_followups_2_weeks, icon = "fa-phone")
 
 ```{r}
 total_followups_last_week <- followups %>%
-  fill(week_num) %>%
-  filter(week_num == max(week_num, na.rm = T)-1) %>%
-  summarise(
-    total_calls = sum(n)
-  )
+  filter(last_week) %>%
+  summarise(sum(n))
 valueBox(total_followups_last_week, icon = "fa-phone")
 ```
 
 
-## Highest number of followup interviews scheduled in any week
+### Highest number of followup interviews scheduled in any week
+
 ```{r}
 highest_followups <- followups %>%
-  fill(week_num) %>%
   group_by(week_num) %>%
   summarise(week_followups = sum(n)) %>%
   ungroup() %>%
@@ -360,7 +370,7 @@ highest_followups <- followups %>%
 valueBox(highest_followups, icon = "fa-phone")
 ```
 
-Plots {data-width=550}
+Plots
 -----------------------------------------------------------------------
 
 ### Recruiting calls made and follow-up interviews scheduled by date
