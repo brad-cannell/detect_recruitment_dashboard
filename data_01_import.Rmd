@@ -1,0 +1,89 @@
+---
+title: "Import DETECT Follow-up Interview Data"
+---
+
+```{r message=FALSE}
+library(dplyr)
+library(DBI)
+library(odbc)
+library(keyring)
+library(purrr)
+library(stringr)
+library(readr)
+library(lubridate)
+library(hms)
+library(testthat)
+```
+
+# Open the Connection to the FM database
+
+You must first connect to the UTHealth VPN
+Keyring notes: https://db.rstudio.com/best-practices/managing-credentials/
+Keychain error: https://github.com/r-lib/keyring/issues/45#issuecomment-332491293
+
+```{r}
+con <- dbConnect(
+  odbc(),
+  driver   = "/Library/ODBC/FileMaker ODBC.bundle/Contents/MacOS/FileMaker ODBC",
+  server   = "spsqlapwv003.sph.uthouston.edu",
+  database = "DETECT",
+  uid      = key_list("detect_fm_db_readonly")[1,2],
+  pwd      = key_get("detect_fm_db_readonly")
+)
+```
+
+# Pull tables into R as data frames
+
+## ParticipantCallLog 
+
+ParticipantCallLog has call log data from every call made. However, it doesn't have data for any of the screening questions.
+
+## PhoneRecruitment
+
+PhoneRecruitment has data for the screening questions, but only for the calls that made it that far. It doesn't have data for every call made.
+
+## ParticipantScheduler 
+
+ParticipantScheduler contains the date and time for the scheduled follow-up interview.
+
+## Consent 
+
+Consent contains information on whether a person gave consent or not.
+
+## GiftCard
+
+GiftCard contains one row for each gift card given out. It also contains all the follow-up interview questions.
+
+## Participant
+
+Participant contains info from MedStar's EPCR including the original DETECT screenings.
+
+## Observational measures
+
+Data collected on the observational measures layout in FM Pro during the F/U interviews. 
+
+2021-02-08: Downloading this to check for incomplete
+
+```{r}
+walk(
+  # List of tables to import
+  c("ParticipantCallLog", "PhoneRecruitment", "ParticipantScheduler", 
+    "Consent", "GiftCard", "Participant", "ObservationalMeasures"),
+  
+  # Import and add data frames to the global environment
+  function(x) {
+    df <- dbReadTable(con, x)
+    # Convert camel case to snake case for df name
+    nm <- str_replace_all(x, "(\\B)([A-Z])", "_\\2")
+    nm <- str_to_lower(nm)
+    assign(nm, df, envir = .GlobalEnv)
+  }
+)
+```
+
+# Close the connection to the database
+
+```{r}
+dbDisconnect(con)
+rm(con)
+```

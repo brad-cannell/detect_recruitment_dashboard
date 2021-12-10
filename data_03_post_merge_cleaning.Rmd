@@ -1,0 +1,152 @@
+---
+title: "Post merge data cleaning"
+---
+
+```{r message=FALSE}
+library(dplyr)
+library(readr)
+library(testthat)
+```
+
+```{r}
+# For testing only
+# merged_followup <- read_rds("/Users/bradcannell/Desktop/merged_followup.rds")
+```
+
+# Wrangle dates and times
+
+What to do about the MedStar Id's with a record in phone_recruitment, but not the call_log? 
+
+In the cases below, all the values for x_created_timestamp_cl are NA because x_created_timestamp_cl comes from the call log. However, when we checked records that do have a value for both, the difference between when the record was open (x_created_timestamp_pr) and when the last call call was made (x_created_timestamp_cl when we merge on last_row) can be many days apart. However, for all of these cases, presumably only one call was ever made (i.e., the call that resulted in a record in phone_recruitment). Therefore, we will create an new call_timestamp variable that is equal to x_created_timestamp_cl when available and equal to x_created_timestamp_pr otherwise. Also, this is such a small proportion of records that whatever slight errors are introduced by this procedure should not have a large impact on conclusions.
+
+```{r}
+# Data checks - Look at records without any call log data.
+# merged_followup %>%
+#   filter(is.na(x_created_timestamp_cl))
+```
+
+```{r}
+merged_followup <- merged_followup %>% 
+  mutate(
+    call_timestamp = if_else(
+      is.na(x_created_timestamp_cl), x_created_timestamp_pr, x_created_timestamp_cl
+    )
+  )
+```
+
+Create factor labels that we can use repeatedly below.
+
+```{r}
+hours_f <- c("00-00:59", "01-01:59", "02-02:59", "03-03:59", "04-04:59", "05-05:59", 
+             "06-06:59", "07-07:59", "08-08:59", "09-09:59", "10-10:59", "11-11:59", 
+             "12-12:59", "13-13:59", "14-14:59", "15-15:59", "16-16:59", "17-17:59", 
+             "18-18:59", "19-19:59", "20-20:59", "21-21:59", "22-22:59", "23-23:59")
+
+days_f <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
+```
+
+Add _call_ dates, days, months, and times.
+
+```{r}
+merged_followup <- merged_followup %>% 
+  mutate(
+    call_date   = as.Date(call_timestamp),
+    call_time   = hms::as_hms(call_timestamp),
+    call_hour   = lubridate::hour(call_time),
+    call_hour_f = factor(call_hour, 0:23, hours_f),
+    call_day    = weekdays(call_date),
+    call_day    = forcats::fct_relevel(call_day, days_f),
+    call_month  = lubridate::month(call_date),
+    call_month  = factor(call_month, 1:12, month.name),
+    call_year   = lubridate::year(call_date)
+  )
+```
+
+```{r}
+# Check call hours - because we sometimes have problems with this
+test_that("Make sure there aren't calls made outside of expected times of the day.", {
+  call_hours_in_df <- sort(unique(merged_followup$call_hour))
+  call_hours_expected <- c(8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19)
+  expect_equal(call_hours_in_df, call_hours_expected)
+})
+```
+
+Add _appointment_ hours, days, months, and years.
+
+```{r}
+merged_followup <- merged_followup %>% 
+  mutate(
+    appointment_hour   = lubridate::hour(appointment_time),
+    appointment_hour_f = factor(appointment_hour, 0:23, hours_f),
+    appointment_day    = weekdays(appointment_date),
+    appointment_day    = forcats::fct_relevel(appointment_day, days_f),
+    appointment_month  = lubridate::month(appointment_date),
+    appointment_month  = factor(appointment_month, 1:12, month.name),
+    appointment_year   = lubridate::year(appointment_date)
+  )
+```
+
+Add _gift card given_ hours, days, months, and years.
+
+```{r}
+merged_followup <- merged_followup %>%
+  mutate(
+    gift_card_date   = as.Date(gift_card_timestamp),
+    gift_care_time   = hms::as_hms(gift_card_timestamp),
+    gift_card_hour   = lubridate::hour(gift_card_timestamp),
+    gift_card_hour_f = factor(gift_card_hour, 0:23, hours_f),
+    gift_card_day    = weekdays(gift_card_date),
+    gift_card_day    = forcats::fct_relevel(gift_card_day, days_f),
+    gift_card_month  = lubridate::month(gift_card_date),
+    gift_card_month  = factor(gift_card_month, 1:12, month.name),
+    gift_card_year   = lubridate::year(gift_card_date)
+  )
+```
+
+# Tag scheduled rows
+
+If appointment_date is not missing, then we assume they were scheduled for follow-up.
+
+x_record_status is not "Participant scheduled" in all cases. Sometimes this is justified. See (e89b6). This patient was scheduled. We called back to reschedule for some reason. At the call back, the patient said they did not want to reschedule. In the dashboard, this person should count as scheduled, but not count for completed follow-up.
+
+```{r}
+merged_followup <- merged_followup %>% 
+  mutate(scheduled = if_else(!is.na(appointment_date), TRUE, FALSE))
+```
+
+# Tag consent given
+
+```{r}
+merged_followup <- merged_followup %>% 
+  mutate(
+    consent_given = if_else(
+      !is.na(consent_timestamp) & consent_status == "Consent received/Participating",
+      TRUE, FALSE
+    ),
+    consent_refused = if_else(
+      !is.na(consent_timestamp) & consent_status == "Dissent stated/Not participating",
+      TRUE, FALSE
+    )
+  )
+```
+
+# Tag gift card given
+
+I am aware of two gift cards that were given, but the medics were unable to upload the signature page to FM Pro. I did a manual check and both participants are in the merged data and have a value of "Gift Card Distributed" for gift_card_status.
+
+There were 3 MedStar IDs (as of 2020-09-23) that had a value of "Incomplete" for gift_card_status. I did a manual check in FM Pro. All three got a gift card, the medic just forgot to change the status to "Gift Card Distributed." I changed them. I built a check for that in data_02_merge.Rmd.
+
+```{r}
+merged_followup <- merged_followup %>% 
+  mutate(
+    gift_card_given = if_else(
+      !is.na(gift_card_timestamp) & gift_card_status == "Gift Card Distributed",
+      TRUE, FALSE
+    )
+  )
+```
+
+```{r}
+# For testing only
+# write_rds(merged_followup, "/Users/bradcannell/Desktop/merged_followup.rds")
+```
